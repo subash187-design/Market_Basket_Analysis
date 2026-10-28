@@ -1,8 +1,15 @@
 import pandas as pd
 
 def preprocess_data(data):
-    # Take all item columns except first column (TransactionID)
-    transactions = data.iloc[:, 1:].values.tolist()
+    if data is None or data.empty:
+        return []
+
+    # If first column is an ID column (e.g. TransactionID, ID, TID), skip it
+    first_col = str(data.columns[0]).strip().lower()
+    if data.shape[1] > 1 and any(k in first_col for k in ["transaction", "tid", "id", "receipt", "order"]):
+        transactions = data.iloc[:, 1:].values.tolist()
+    else:
+        transactions = data.values.tolist()
 
     cleaned_transactions = []
 

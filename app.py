@@ -40,17 +40,26 @@ else:
 # Read data
 # =========================
 if uploaded_file is not None:
-    if file_type == "CSV":
-        data = pd.read_csv(uploaded_file)
-    else:
-        data = pd.read_excel(uploaded_file)
+    try:
+        if file_type == "CSV":
+            data = pd.read_csv(uploaded_file)
+        else:
+            data = pd.read_excel(uploaded_file)
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
+        st.stop()
 else:
-    data = pd.read_csv("transactions.csv")
+    st.info("👆 Please upload a transaction file (CSV or Excel) to begin the analysis.")
+    st.stop()
 
 st.subheader("📊 Dataset Preview")
 st.dataframe(data, use_container_width=True)
 
 transactions = preprocess_data(data)
+
+if not transactions:
+    st.warning("⚠️ No valid transactions found in the uploaded file. Please make sure items are listed in rows.")
+    st.stop()
 
 # =========================
 # Comparison Mode

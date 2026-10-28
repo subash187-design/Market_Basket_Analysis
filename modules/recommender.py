@@ -1,7 +1,10 @@
 from mlxtend.frequent_patterns import association_rules
 
 def generate_rules(frequent_itemsets, min_confidence):
-    if frequent_itemsets.empty or len(frequent_itemsets) < 2:
+    if frequent_itemsets is None or frequent_itemsets.empty or len(frequent_itemsets) < 2:
+        return None
+
+    if not any(len(itemset) >= 2 for itemset in frequent_itemsets["itemsets"]):
         return None
 
     rules = association_rules(
