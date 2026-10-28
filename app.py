@@ -30,15 +30,18 @@ if mode == "Single Algorithm":
     algorithm = st.sidebar.selectbox("Choose Algorithm", ["Apriori", "FP-Growth"])
 
 # =========================
+# Main Page Header
+# =========================
+st.title("🛒 Retail Basket Analytics Dashboard")
+st.write("Discover product associations, compare algorithms, and generate smart recommendations.")
+
+# =========================
 # File Upload
 # =========================
 if file_type == "CSV":
     uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
 else:
     uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx", "xls"])
-
-st.title("🛒 Retail Basket Analytics Dashboard")
-st.write("Discover product associations, compare algorithms, and generate smart recommendations.")
 
 # =========================
 # Read Data (User-driven upload)
