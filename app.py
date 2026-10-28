@@ -10,47 +10,131 @@ from modules.visualizer import plot_top_items
 
 st.set_page_config(page_title="Retail Basket Analytics Dashboard", layout="wide")
 
-st.title("🛒 Retail Basket Analytics Dashboard")
-st.write("Discover product associations, compare algorithms, and generate smart recommendations.")
-
 # =========================
-# Sidebar controls
+# Sidebar Branding
 # =========================
 st.sidebar.title("🛒 Market Basket Analysis")
 st.sidebar.caption("Retail Basket Analytics Dashboard")
 st.sidebar.divider()
+
+# =========================
+# Data Source & Upload
+# =========================
+st.sidebar.header("📁 Transaction Data")
+input_source = st.sidebar.radio(
+    "Choose input method",
+    ["Upload File", "Manual / Interactive Table"],
+    index=0
+)
+
+if input_source == "Upload File":
+    file_type = st.sidebar.radio("File format", ["CSV", "Excel"])
+    uploaded_file = st.sidebar.file_uploader(
+        f"Upload {file_type} file",
+        type=["csv"] if file_type == "CSV" else ["xlsx", "xls"]
+    )
+else:
+    uploaded_file = None
+
+# =========================
+# Analysis Settings
+# =========================
+st.sidebar.divider()
 st.sidebar.header("⚙️ Analysis Settings")
-file_type = st.sidebar.radio("Choose input type", ["CSV", "Excel"])
-min_support = st.sidebar.slider("Minimum Support", 0.1, 1.0, 0.2, 0.1)
-min_confidence = st.sidebar.slider("Minimum Confidence", 0.1, 1.0, 0.5, 0.1)
+min_support = st.sidebar.slider("Minimum Support", 0.05, 1.0, 0.2, 0.05)
+min_confidence = st.sidebar.slider("Minimum Confidence", 0.05, 1.0, 0.5, 0.05)
 mode = st.sidebar.selectbox("Choose Mode", ["Single Algorithm", "Comparison Mode"])
 
 if mode == "Single Algorithm":
     algorithm = st.sidebar.selectbox("Choose Algorithm", ["Apriori", "FP-Growth"])
 
 # =========================
-# File upload
+# Main Page Header
 # =========================
-if file_type == "CSV":
-    uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
-else:
-    uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"])
+st.title("🛒 Retail Basket Analytics Dashboard")
+st.write("Discover product associations, compare algorithms, and generate smart recommendations.")
 
 # =========================
-# Read data
+# Data Acquisition (No default example transactions)
 # =========================
-if uploaded_file is not None:
-    if file_type == "CSV":
-        data = pd.read_csv(uploaded_file)
+raw_data = None
+
+if input_source == "Upload File":
+    if uploaded_file is not None:
+        try:
+            if file_type == "CSV":
+                raw_data = pd.read_csv(uploaded_file)
+            else:
+                raw_data = pd.read_excel(uploaded_file)
+        except Exception as e:
+            st.error(f"Error reading file: {e}")
+            st.stop()
     else:
-        data = pd.read_excel(uploaded_file)
-else:
-    data = pd.read_csv("transactions.csv")
+        # Prompt the user to upload their dataset - DO NOT run any example analysis
+        st.info("👈 Please upload your transaction file (CSV or Excel) in the sidebar to start the analysis.")
 
-st.subheader("📊 Dataset Preview")
-st.dataframe(data, use_container_width=True)
+        with st.expander("ℹ️ How to format your transaction data", expanded=True):
+            st.markdown("""
+            Upload a **CSV** or **Excel** file containing retail transactions.
+            
+            **Example structure:**
+            | TransactionID | Item1 | Item2 | Item3 |
+            | :--- | :--- | :--- | :--- |
+            | 1 | Milk | Bread | Butter |
+            | 2 | Bread | Butter | |
+            | 3 | Milk | Cookies | |
+            
+            - Each row represents a single customer transaction.
+            - You can have multiple item columns or comma-separated items.
+            """)
+
+            sample_template = pd.DataFrame({
+                "TransactionID": [1, 2, 3],
+                "Item1": ["", "", ""],
+                "Item2": ["", "", ""],
+                "Item3": ["", "", ""]
+            })
+            st.download_button(
+                label="⬇ Download Blank CSV Template",
+                data=sample_template.to_csv(index=False),
+                file_name="transaction_template.csv",
+                mime="text/csv"
+            )
+
+        st.stop()
+else:
+    # Manual Entry / Table Editor
+    if "manual_data" not in st.session_state:
+        st.session_state.manual_data = pd.DataFrame({
+            "TransactionID": [1, 2, 3],
+            "Item1": ["Milk", "Bread", "Butter"],
+            "Item2": ["Bread", "Butter", "Jam"],
+            "Item3": ["Butter", "", ""]
+        })
+    raw_data = st.session_state.manual_data
+
+# =========================
+# Interactive Transaction Editor (User can update transactions)
+# =========================
+st.subheader("📝 Transaction Dataset (View & Update)")
+st.caption("You can edit any cell, add new transaction rows (+), or delete rows. All analytics will update in real-time.")
+
+data = st.data_editor(raw_data, num_rows="dynamic", use_container_width=True)
+
+col_dl, _ = st.columns([1, 4])
+with col_dl:
+    st.download_button(
+        label="⬇ Download Transactions CSV",
+        data=data.to_csv(index=False),
+        file_name="transactions.csv",
+        mime="text/csv"
+    )
 
 transactions = preprocess_data(data)
+
+if not transactions:
+    st.warning("⚠️ No valid transactions found. Please add items in the table above to perform analysis.")
+    st.stop()
 
 # =========================
 # Comparison Mode
@@ -170,7 +254,7 @@ else:
         st.subheader("💡 Rule-Based Recommendations")
         for _, row in rules.iterrows():
             st.success(
-                f"If a customer buys {row['antecedents']}, they may also buy {row['consequents']} "
+                f"If a customer buys **{row['antecedents']}**, they may also buy **{row['consequents']}** "
                 f"(Confidence: {row['confidence']:.2f}, Lift: {row['lift']:.2f})"
             )
 
@@ -182,7 +266,7 @@ else:
             st.write(f"Recommended products for **{selected_product}**:")
             for rec in recommendations:
                 st.info(
-                    f"{rec['recommended_product']} "
+                    f"👉 **{rec['recommended_product']}** "
                     f"(Confidence: {rec['confidence']:.2f}, Lift: {rec['lift']:.2f})"
                 )
         else:
