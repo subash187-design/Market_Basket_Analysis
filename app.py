@@ -8,238 +8,49 @@ from modules.fpgrowth_model import run_fpgrowth
 from modules.recommender import generate_rules, recommend_products
 from modules.visualizer import plot_top_items
 
-def parse_pasted_text(text):
-    lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
-    parsed_lines = []
-    max_items = 0
-    for line in lines:
-        items = [item.strip() for item in line.split(",") if item.strip()]
-        if items:
-            parsed_lines.append(items)
-            max_items = max(max_items, len(items))
-    if not parsed_lines:
-        return None
-    col_names = ["TransactionID"] + [f"Item{i+1}" for i in range(max_items)]
-    data_rows = []
-    for idx, items in enumerate(parsed_lines, start=1):
-        row = [idx] + items + [""] * (max_items - len(items))
-        data_rows.append(row)
-    return pd.DataFrame(data_rows, columns=col_names)
-
 st.set_page_config(page_title="Retail Basket Analytics Dashboard", layout="wide")
 
-# =========================
-# Session State Initialization
-# =========================
-if "active_data" not in st.session_state:
-    st.session_state.active_data = None
+st.title("🛒 Retail Basket Analytics Dashboard")
+st.write("Discover product associations, compare algorithms, and generate smart recommendations.")
 
 # =========================
-# Sidebar Branding
+# Sidebar controls
 # =========================
 st.sidebar.title("🛒 Market Basket Analysis")
 st.sidebar.caption("Retail Basket Analytics Dashboard")
 st.sidebar.divider()
-
-# =========================
-# Sidebar Controls
-# =========================
-st.sidebar.header("📁 Quick Upload")
-sidebar_upload = st.sidebar.file_uploader(
-    "Upload CSV or Excel file",
-    type=["csv", "xlsx", "xls"],
-    key="sidebar_uploader"
-)
-
-if sidebar_upload is not None:
-    try:
-        if sidebar_upload.name.endswith(".xlsx") or sidebar_upload.name.endswith(".xls"):
-            st.session_state.active_data = pd.read_excel(sidebar_upload)
-        else:
-            st.session_state.active_data = pd.read_csv(sidebar_upload)
-    except Exception as e:
-        st.sidebar.error(f"Error loading file: {e}")
-
-if st.session_state.active_data is not None:
-    if st.sidebar.button("🔄 Load Different Data", use_container_width=True):
-        st.session_state.active_data = None
-        st.rerun()
-
-st.sidebar.divider()
 st.sidebar.header("⚙️ Analysis Settings")
-min_support = st.sidebar.slider("Minimum Support", 0.05, 1.0, 0.2, 0.05)
-min_confidence = st.sidebar.slider("Minimum Confidence", 0.05, 1.0, 0.5, 0.05)
+file_type = st.sidebar.radio("Choose input type", ["CSV", "Excel"])
+min_support = st.sidebar.slider("Minimum Support", 0.1, 1.0, 0.2, 0.1)
+min_confidence = st.sidebar.slider("Minimum Confidence", 0.1, 1.0, 0.5, 0.1)
 mode = st.sidebar.selectbox("Choose Mode", ["Single Algorithm", "Comparison Mode"])
 
 if mode == "Single Algorithm":
     algorithm = st.sidebar.selectbox("Choose Algorithm", ["Apriori", "FP-Growth"])
 
 # =========================
-# Main Page Header
+# File upload
 # =========================
-st.title("🛒 Retail Basket Analytics Dashboard")
-st.write("Discover product associations, compare algorithms, and generate smart recommendations.")
-
-# =========================
-# Interactive Landing Workspace (When no dataset is loaded)
-# =========================
-if st.session_state.active_data is None:
-    # Feature overview cards
-    card_col1, card_col2, card_col3 = st.columns(3)
-    with card_col1:
-        st.container(border=True).markdown("""
-        ### 📥 1. Flexible Input
-        Upload sales data in **CSV/Excel**, build transactions interactively in the live grid, or paste plain text.
-        """)
-    with card_col2:
-        st.container(border=True).markdown("""
-        ### ⚡ 2. Mining Engine
-        Benchmark **Apriori** and **FP-Growth** side-by-side with execution time and frequent itemset counts.
-        """)
-    with card_col3:
-        st.container(border=True).markdown("""
-        ### 💡 3. Smart Insights
-        Generate association rules with **Support**, **Confidence**, and **Lift** to drive cross-selling.
-        """)
-
-    st.write("")
-    st.subheader("🚀 Get Started: Choose How to Input Your Transactions")
-
-    tab_upload, tab_builder, tab_paste, tab_template = st.tabs([
-        "📁 Upload File",
-        "✍️ Build Transactions Online",
-        "📋 Quick Text Paste",
-        "🛠️ Interactive Template Builder"
-    ])
-
-    # Tab 1: Direct File Upload
-    with tab_upload:
-        st.markdown("#### Upload your transaction spreadsheet")
-        c_fmt, _ = st.columns([1, 2])
-        with c_fmt:
-            main_file_type = st.radio("Choose file format", ["CSV", "Excel"], horizontal=True)
-
-        main_upload = st.file_uploader(
-            f"Drag and drop your {main_file_type} file here",
-            type=["csv"] if main_file_type == "CSV" else ["xlsx", "xls"],
-            key="main_uploader"
-        )
-
-        if main_upload is not None:
-            try:
-                if main_file_type == "CSV":
-                    df_up = pd.read_csv(main_upload)
-                else:
-                    df_up = pd.read_excel(main_upload)
-
-                st.success(f"✅ Loaded '{main_upload.name}' with {len(df_up)} rows and {len(df_up.columns)} columns.")
-                st.caption("Preview of uploaded data:")
-                st.dataframe(df_up.head(5), use_container_width=True)
-
-                if st.button("🚀 Analyze Uploaded Transactions", type="primary", use_container_width=True):
-                    st.session_state.active_data = df_up
-                    st.rerun()
-            except Exception as ex:
-                st.error(f"Error reading file: {ex}")
-
-    # Tab 2: Interactive Table Builder
-    with tab_builder:
-        st.markdown("#### Build or edit transactions directly in your browser")
-        st.caption("Click any cell to edit, click the bottom row **(+)** to add new transactions, or select rows and press **Delete**.")
-
-        if "live_builder_df" not in st.session_state:
-            st.session_state.live_builder_df = pd.DataFrame([
-                {"TransactionID": 1, "Item1": "Milk", "Item2": "Bread", "Item3": "Butter"},
-                {"TransactionID": 2, "Item1": "Bread", "Item2": "Butter", "Item3": "Jam"},
-                {"TransactionID": 3, "Item1": "Milk", "Item2": "Cookies", "Item3": ""},
-                {"TransactionID": 4, "Item1": "Bread", "Item2": "Milk", "Item3": ""},
-                {"TransactionID": 5, "Item1": "Butter", "Item2": "Jam", "Item3": ""},
-            ])
-
-        edited_builder = st.data_editor(
-            st.session_state.live_builder_df,
-            num_rows="dynamic",
-            use_container_width=True,
-            key="landing_builder_editor"
-        )
-
-        if st.button("🚀 Run Analysis on These Transactions", type="primary", use_container_width=True):
-            st.session_state.active_data = edited_builder
-            st.rerun()
-
-    # Tab 3: Quick Text Paste
-    with tab_paste:
-        st.markdown("#### Paste comma-separated transactions")
-        st.caption("Paste one transaction per line, with items separated by commas.")
-
-        pasted_text = st.text_area(
-            "Transaction Text",
-            placeholder="Milk, Bread, Butter\nBread, Butter, Jam\nMilk, Cookies\nBread, Milk",
-            height=160,
-            label_visibility="collapsed"
-        )
-
-        if st.button("🚀 Convert & Run Analysis", type="primary", use_container_width=True):
-            parsed_df = parse_pasted_text(pasted_text)
-            if parsed_df is not None and not parsed_df.empty:
-                st.session_state.active_data = parsed_df
-                st.rerun()
-            else:
-                st.warning("Please enter at least one line of items separated by commas.")
-
-    # Tab 4: Interactive Template Builder
-    with tab_template:
-        st.markdown("#### Customize and download a starter CSV template")
-        c_rows, c_cols = st.columns(2)
-        with c_rows:
-            gen_rows = st.slider("Number of sample transaction rows", min_value=3, max_value=30, value=5)
-        with c_cols:
-            gen_items = st.slider("Number of item columns", min_value=2, max_value=8, value=4)
-
-        template_cols = ["TransactionID"] + [f"Item{i+1}" for i in range(gen_items)]
-        template_data = {
-            col: [r + 1 if col == "TransactionID" else "" for r in range(gen_rows)]
-            for col in template_cols
-        }
-        gen_template_df = pd.DataFrame(template_data)
-
-        st.caption("Live Template Preview:")
-        st.dataframe(gen_template_df, use_container_width=True)
-
-        st.download_button(
-            label=f"⬇ Download Custom CSV Template ({gen_rows} rows × {gen_items} items)",
-            data=gen_template_df.to_csv(index=False),
-            file_name="transactions_template.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-
-    st.stop()
+if file_type == "CSV":
+    uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
+else:
+    uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"])
 
 # =========================
-# Interactive Transaction Editor (User can update transactions)
+# Read data
 # =========================
-raw_data = st.session_state.active_data
+if uploaded_file is not None:
+    if file_type == "CSV":
+        data = pd.read_csv(uploaded_file)
+    else:
+        data = pd.read_excel(uploaded_file)
+else:
+    data = pd.read_csv("transactions.csv")
 
-st.subheader("📝 Transaction Dataset (View & Update)")
-st.caption("You can edit any cell, add new transaction rows (+), or delete rows. All analytics will update in real-time.")
-
-data = st.data_editor(raw_data, num_rows="dynamic", use_container_width=True)
-
-col_dl, _ = st.columns([1, 4])
-with col_dl:
-    st.download_button(
-        label="⬇ Download Transactions CSV",
-        data=data.to_csv(index=False),
-        file_name="transactions.csv",
-        mime="text/csv"
-    )
+st.subheader("📊 Dataset Preview")
+st.dataframe(data, use_container_width=True)
 
 transactions = preprocess_data(data)
-
-if not transactions:
-    st.warning("⚠️ No valid transactions found. Please add items in the table above to perform analysis.")
-    st.stop()
 
 # =========================
 # Comparison Mode
@@ -359,7 +170,7 @@ else:
         st.subheader("💡 Rule-Based Recommendations")
         for _, row in rules.iterrows():
             st.success(
-                f"If a customer buys **{row['antecedents']}**, they may also buy **{row['consequents']}** "
+                f"If a customer buys {row['antecedents']}, they may also buy {row['consequents']} "
                 f"(Confidence: {row['confidence']:.2f}, Lift: {row['lift']:.2f})"
             )
 
@@ -371,7 +182,7 @@ else:
             st.write(f"Recommended products for **{selected_product}**:")
             for rec in recommendations:
                 st.info(
-                    f"👉 **{rec['recommended_product']}** "
+                    f"{rec['recommended_product']} "
                     f"(Confidence: {rec['confidence']:.2f}, Lift: {rec['lift']:.2f})"
                 )
         else:

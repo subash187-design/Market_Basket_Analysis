@@ -1,23 +1,16 @@
 from mlxtend.frequent_patterns import association_rules
 
 def generate_rules(frequent_itemsets, min_confidence):
-    if frequent_itemsets is None or frequent_itemsets.empty or len(frequent_itemsets) < 2:
+    if frequent_itemsets.empty or len(frequent_itemsets) < 2:
         return None
 
-    # association_rules requires at least one itemset of length >= 2
-    if not any(len(itemset) >= 2 for itemset in frequent_itemsets["itemsets"]):
-        return None
+    rules = association_rules(
+        frequent_itemsets,
+        metric="confidence",
+        min_threshold=min_confidence
+    )
 
-    try:
-        rules = association_rules(
-            frequent_itemsets,
-            metric="confidence",
-            min_threshold=min_confidence
-        )
-    except Exception:
-        return None
-
-    if rules is None or rules.empty:
+    if rules.empty:
         return None
 
     rules = rules[[
@@ -26,7 +19,7 @@ def generate_rules(frequent_itemsets, min_confidence):
         "support",
         "confidence",
         "lift"
-    ]].copy()
+    ]]
 
     rules["antecedents"] = rules["antecedents"].apply(lambda x: ", ".join(list(x)))
     rules["consequents"] = rules["consequents"].apply(lambda x: ", ".join(list(x)))
